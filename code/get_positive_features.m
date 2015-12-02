@@ -28,16 +28,27 @@ function features_pos = get_positive_features(train_path_pos, feature_params)
 %  http://www.vlfeat.org/overview/hog.html   (Tutorial)
 % rgb2gray
 
-image_files = dir( fullfile( train_path_pos, '*.jpg') ); %Caltech Faces stored as .jpg
-num_images = length(image_files);
-dimensionality = (feature_params.template_size / feature_params.hog_cell_size)^2 * 31;
-features_pos = zeros( num_images, dimensionality);
-for i = 1:num_images
-    fprintf(['read train image ', int2str(i), ', total ', int2str(num_images), '\n']);
-    image = imread( [train_path_pos, '\', image_files(i).name] );
-    single_image = single(image);
-    hog = vl_hog(single_image, feature_params.hog_cell_size); 
-    features_pos(i, :) = reshape(hog, [1, dimensionality]);
+    image_files = dir( fullfile( train_path_pos, '*.jpg') ); %Caltech Faces stored as .jpg
+    num_images = length(image_files);
+    dimensionality = (feature_params.template_size / feature_params.hog_cell_size)^2 * 31;
+    if feature_params.mirror
+        features_pos = zeros( 2 * num_images, dimensionality);
+    else
+        features_pos = zeros( num_images, dimensionality);
+    end
+    fprintf('read positive samples\n');
+
+    for i = 1:num_images
+        fprintf(['read train image ', int2str(i), ', total ', int2str(num_images), '\n']);
+        image = imread( [train_path_pos, '\', image_files(i).name] );
+        if feature_params.mirror
+            hog = imageToHog(image, feature_params.hog_cell_size);
+            features_pos(i * 2 - 1, :) = reshape(hog, [1, dimensionality]);
+            mirror_hog = imageToHog(mirrorImage(image), feature_params.hog_cell_size);
+            features_pos(i * 2 - 1, :) = reshape(mirror_hog, [1, dimensionality]);
+        else
+            hog = imageToHog(image, feature_params.hog_cell_size);
+            features_pos(i, :) = reshape(hog, [1, dimensionality]);
+        end 
+    end
 end
-% placeholder to be deleted
-% features_pos = rand(100, (feature_params.template_size / feature_params.hog_cell_size)^2 * 31);

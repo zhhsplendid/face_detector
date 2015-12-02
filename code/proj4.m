@@ -53,17 +53,29 @@ label_path = fullfile(data_path,'test_scenes/ground_truth_bboxes.txt'); %the gro
 %parameters such as the number of orientations, but that does not help
 %performance in our limited test.
 feature_params = struct('template_size', 36, 'hog_cell_size', 6, 'mirror', true);
-
-
+LAMBDA = 0.0001;
+num_negative_examples = 10000;
+%Whether save or load to precomputing data
+SAVE = true;
+LOAD = false;
 %% Step 1. Load positive training crops and random negative examples
 %YOU CODE 'get_positive_features' and 'get_random_negative_features'
 
-features_pos = get_positive_features( train_path_pos, feature_params );
+if LOAD
+    load('pre_computing.mat', 'train_data', 'train_label');
+else
+    features_pos = get_positive_features( train_path_pos, feature_params );
+    features_neg = get_random_negative_features( non_face_scn_path, feature_params, num_negative_examples);
+    train_data = [features_pos; features_neg]';
+    train_label = [ones(size(features_pos, 1), 1); ones(size(features_neg, 1), 1)]';
+end
 
-num_negative_examples = 10000; %Higher will work strictly better, but you should start with 10000 for debugging
-features_neg = get_random_negative_features( non_face_scn_path, feature_params, num_negative_examples);
+if SAVE
+    save('pre_computing.mat', 'train_data', 'train_label');
+end
 
-%{    
+
+[w b] = vl_svmtrain(train_data, train_label, LAMBDA); 
 %% step 2. Train Classifier
 % Use vl_svmtrain on your training features to get a linear classifier
 % specified by 'w' and 'b'
@@ -73,9 +85,8 @@ features_neg = get_random_negative_features( non_face_scn_path, feature_params, 
 % work best e.g. 0.0001, but you can try other values
 
 %YOU CODE classifier training. Make sure the outputs are 'w' and 'b'.
-w = rand((feature_params.template_size / feature_params.hog_cell_size)^2 * 31,1); %placeholder, delete
-b = rand(1); %placeholder, delete
 
+ 
 %% step 3. Examine learned classifier
 % You don't need to modify anything in this section. The section first
 % evaluates _training_ error, which isn't ultimately what we care about,
@@ -85,7 +96,7 @@ fprintf('Initial classifier performance on train data:\n')
 confidences = [features_pos; features_neg]*w + b;
 label_vector = [ones(size(features_pos,1),1); -1*ones(size(features_neg,1),1)];
 [tp_rate, fp_rate, tn_rate, fn_rate] =  report_accuracy( confidences, label_vector );
-
+%{
 % Visualize how well separated the positive and negative examples are at
 % training time. Sometimes this can idenfity odd biases in your training
 % data, especially if you're trying hard negative mining. This
