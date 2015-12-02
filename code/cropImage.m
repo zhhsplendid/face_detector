@@ -2,14 +2,12 @@ function [ outImage ] = cropImage( inputImage, rowBegin, colBegin, rowSize, colS
     
     if size(inputImage, 3) == 3 %RGB
         outImage = zeros(rowSize, colSize, 3);
-        for i = 1:rowSize
-            outImage(i, :, :) = inputImage(rowBegin - 1 + i, colBegin: colBegin + colSize - 1, :);
-        end
+        outImage(i, :, :) = inputImage(rowBegin:rowBegin + rowSize - 1, ...
+                colBegin: colBegin + colSize - 1, :);
     else
         outImage = zeros(rowSize, colSize);
-        for i = 1:rowSize
-            outImage(i, :) = inputImage(rowBegin - 1 + i, colBegin: colBegin + colSize - 1);
-        end
+        outImage(1:rowSize, :) = inputImage(rowBegin:rowBegin + rowSize - 1, ...
+            colBegin: colBegin + colSize - 1);
     end
 
 

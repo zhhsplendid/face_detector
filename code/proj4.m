@@ -52,30 +52,41 @@ label_path = fullfile(data_path,'test_scenes/ground_truth_bboxes.txt'); %the gro
 %add other fields to this struct if you want to modify HoG default
 %parameters such as the number of orientations, but that does not help
 %performance in our limited test.
-feature_params = struct('template_size', 36, 'hog_cell_size', 6, 'mirror', true);
+feature_params = struct('template_size', 36, 'hog_cell_size', 6, 'mirror', true, ...
+    'neg_sample_step', 16, 'min_win_size', 16, 'max_win_size', 80, 'win_step', 8, ...
+    'slide_step', 8, 'confidence_threshold', 0.5);
 LAMBDA = 0.0001;
-num_negative_examples = 10000;
+num_negative_examples = 13000;
 %Whether save or load to precomputing data
 SAVE = true;
 LOAD = false;
+SKIP_VISUALIZATION = false;
 %% Step 1. Load positive training crops and random negative examples
 %YOU CODE 'get_positive_features' and 'get_random_negative_features'
 
 if LOAD
-    load('pre_computing.mat', 'train_data', 'train_label');
+    load('pre_computing.mat', 'features_pos', 'features_neg');
 else
     features_pos = get_positive_features( train_path_pos, feature_params );
-    features_neg = get_random_negative_features( non_face_scn_path, feature_params, num_negative_examples);
-    train_data = [features_pos; features_neg]';
-    train_label = [ones(size(features_pos, 1), 1); ones(size(features_neg, 1), 1)]';
+    features_neg = get_random_negative_features( non_face_scn_path, feature_params, num_negative_examples);    
 end
 
 if SAVE
-    save('pre_computing.mat', 'train_data', 'train_label');
+    save('pre_computing.mat', 'features_pos', 'features_neg');
+end
+train_data = [features_pos; features_neg]';
+train_label = [ones(size(features_pos, 1), 1); -ones(size(features_neg, 1), 1)]';
+
+if LOAD
+    load(['model_lambda_', num2str(LAMBDA) ,'.mat',], 'w', 'b');
+else
+    [w b] = vl_svmtrain(train_data, train_label, LAMBDA);
 end
 
+if SAVE  
+    save(['model_lambda_', num2str(LAMBDA) ,'.mat',], 'w', 'b');
+end
 
-[w b] = vl_svmtrain(train_data, train_label, LAMBDA); 
 %% step 2. Train Classifier
 % Use vl_svmtrain on your training features to get a linear classifier
 % specified by 'w' and 'b'
@@ -86,42 +97,42 @@ end
 
 %YOU CODE classifier training. Make sure the outputs are 'w' and 'b'.
 
- 
-%% step 3. Examine learned classifier
-% You don't need to modify anything in this section. The section first
-% evaluates _training_ error, which isn't ultimately what we care about,
-% but it is a good sanity check. Your training error should be very low.
+if ~SKIP_VISUALIZATION
+    %% step 3. Examine learned classifier
+    % You don't need to modify anything in this section. The section first
+    % evaluates _training_ error, which isn't ultimately what we care about,
+    % but it is a good sanity check. Your training error should be very low.
 
-fprintf('Initial classifier performance on train data:\n')
-confidences = [features_pos; features_neg]*w + b;
-label_vector = [ones(size(features_pos,1),1); -1*ones(size(features_neg,1),1)];
-[tp_rate, fp_rate, tn_rate, fn_rate] =  report_accuracy( confidences, label_vector );
-%{
-% Visualize how well separated the positive and negative examples are at
-% training time. Sometimes this can idenfity odd biases in your training
-% data, especially if you're trying hard negative mining. This
-% visualization won't be very meaningful with the placeholder starter code.
-non_face_confs = confidences( label_vector < 0);
-face_confs     = confidences( label_vector > 0);
-figure(2); 
-plot(sort(face_confs), 'g'); hold on
-plot(sort(non_face_confs),'r'); 
-plot([0 size(non_face_confs,1)], [0 0], 'b');
-hold off;
+    fprintf('Initial classifier performance on train data:\n')
+    confidences = [features_pos; features_neg]*w + b;
+    label_vector = [ones(size(features_pos,1),1); -1*ones(size(features_neg,1),1)];
+    [tp_rate, fp_rate, tn_rate, fn_rate] =  report_accuracy( confidences, label_vector );
 
-% Visualize the learned detector. This would be a good thing to include in
-% your writeup!
-n_hog_cells = sqrt(length(w) / 31); %specific to default HoG parameters
-imhog = vl_hog('render', single(reshape(w, [n_hog_cells n_hog_cells 31])), 'verbose') ;
-figure(3); imagesc(imhog) ; colormap gray; set(3, 'Color', [.988, .988, .988])
+    % Visualize how well separated the positive and negative examples are at
+    % training time. Sometimes this can idenfity odd biases in your training
+    % data, especially if you're trying hard negative mining. This
+    % visualization won't be very meaningful with the placeholder starter code.
+    non_face_confs = confidences( label_vector < 0);
+    face_confs     = confidences( label_vector > 0);
+    figure(2); 
+    plot(sort(face_confs), 'g'); hold on
+    plot(sort(non_face_confs),'r'); 
+    plot([0 size(non_face_confs,1)], [0 0], 'b');
+    hold off;
 
-pause(0.1) %let's ui rendering catch up
-hog_template_image = frame2im(getframe(3));
-% getframe() is unreliable. Depending on the rendering settings, it will
-% grab foreground windows instead of the figure in question. It could also
-% return a partial image.
-imwrite(hog_template_image, 'visualizations/hog_template.png')
-    
+    % Visualize the learned detector. This would be a good thing to include in
+    % your writeup!
+    n_hog_cells = sqrt(length(w) / 31); %specific to default HoG parameters
+    imhog = vl_hog('render', single(reshape(w, [n_hog_cells n_hog_cells 31])), 'verbose') ;
+    figure(3); imagesc(imhog) ; colormap gray; set(3, 'Color', [.988, .988, .988])
+
+    pause(0.1) %let's ui rendering catch up
+    hog_template_image = frame2im(getframe(3));
+    % getframe() is unreliable. Depending on the rendering settings, it will
+    % grab foreground windows instead of the figure in question. It could also
+    % return a partial image.
+    imwrite(hog_template_image, 'visualizations/hog_template.png')
+end
  
 %% step 4. (optional) Mine hard negatives
 % Mining hard negatives is extra credit. You can get very good performance 
@@ -153,8 +164,9 @@ imwrite(hog_template_image, 'visualizations/hog_template.png')
 % Don't modify anything in 'evaluate_detections'!
 [gt_ids, gt_bboxes, gt_isclaimed, tp, fp, duplicate_detections] = ...
     evaluate_detections(bboxes, confidences, image_ids, label_path);
-
-visualize_detections_by_image(bboxes, confidences, image_ids, tp, fp, test_scn_path, label_path)
+if ~SKIP_VISUALIZATION
+    visualize_detections_by_image(bboxes, confidences, image_ids, tp, fp, test_scn_path, label_path)
+end
 % visualize_detections_by_image_no_gt(bboxes, confidences, image_ids, test_scn_path)
 
 % visualize_detections_by_confidence(bboxes, confidences, image_ids, test_scn_path, label_path);
